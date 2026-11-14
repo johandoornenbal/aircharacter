@@ -1,0 +1,26 @@
+name: Build Apple Silicon VST3
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Apple Silicon runner
+        run: test "$(uname -m)" = arm64
+      - name: Verify untouched DSP
+        run: python3 scripts/verify-dsp.py
+      - name: Configure Apple Silicon
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+      - name: Build
+        run: cmake --build build --config Release --parallel 3
+      - name: Test DSP, state and editor
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Ad-hoc sign and archive
+        run: |
+          codesign --force --deep --sign - "build/AirCharacterStudio_artefacts/Release/VST3/AirCharacter Studio.vst3"
+          codesign --verify --deep --strict "build/AirCharacterStudio_artefacts/Release/VST3/AirCharacter Studio.vst3"
+          ditto -c -k --sequesterRsrc --keepParent "build/AirCharacterStudio_artefacts/Release/VST3/AirCharacter Studio.vst3" AirCharacter-Studio-macOS-arm64.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AirCharacter-Studio-macOS-arm64
+          path: AirCharacter-Studio-macOS-arm64.zip
